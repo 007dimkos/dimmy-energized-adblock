@@ -12,9 +12,9 @@ https://github.com/007dimkos/dimmy-energized-adblock/releases/download/latest/di
 
 1. PassWall 2 (OpenWrt)
 В поле Remote Rule Set (Удаленные правила) добавь строку:
-
+```json
 rule-set:remote:https://github.com/007dimkos/dimmy-energized-adblock/releases/download/latest/dimmyenergizi.srs
-
+```
 Затем установи для этого правила действие BLACKHOLE.
 
 2. Sing-Box
