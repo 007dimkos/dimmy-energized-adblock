@@ -11,7 +11,7 @@ https://github.com/007dimkos/dimmy-energized-adblock/releases/download/latest/di
 🛠 Настройка
 
 1. PassWall 2 (OpenWrt)
-В поле Remote Rule Set (Удаленные правила) добавь строку:
+В поле Remote Rule Set (Удаленные правила) Domain добавь строку:
 ```json
 rule-set:remote:https://github.com/007dimkos/dimmy-energized-adblock/releases/download/latest/dimmyenergizi.srs
 ```
