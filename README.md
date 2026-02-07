@@ -4,25 +4,23 @@
 
 ✅ **Обновляется ежедневно в 05:00 UTC.** ✅ **Формат:** Бинарный SRS (Sing-box 1.10+).
 
----
-
-🛡️ **ENERGIZED AdBlock Rules (Sing-box & PassWall)** Автоматизированная сборка правил для очищения от рекламы и безопасного интернета.  
+🛡️ ENERGIZED AdBlock Rules (Sing-box & PassWall)
+Автоматизированная сборка правил для очищения от рекламы и безопасного интернета.
 Обновляется ежедневно в 05:00 UTC.
 
-🔗 **Прямая ссылка на Rule-Set** `https://github.com/007dimkos/dimmy-energized-adblock/releases/download/latest/dimmyenergizi.srs`
+🔗 Прямая ссылка на Rule-Set
+https://github.com/007dimkos/dimmy-energized-adblock/releases/download/latest/dimmyenergizi.srs
 
----
+🛠 Настройка
 
-> [!TIP]
-> **При использовании XKeen с Xray на роутерах Keenetic можно скачать командой в entware:**
->
-> `curl -Lfo /opt/etc/xray/dat/adlist.dat https://github.com/007dimkos/dimmy-energized-adblock/releases/download/latest/dimmyenergizi.srs`
+1. PassWall 2 (OpenWrt)
+В поле Remote Rule Set (Удаленные правила) добавь строку:
+rule-set:remote:https://github.com/007dimkos/dimmy-energized-adblock/releases/download/latest/dimmyenergizi.srs
 
----
+Затем установи для этого правила действие BLACKHOLE.
 
-## Sing-Box
-
-Добавьте **rule_set** в конфигурацию Sing-Box и правило для него:
+2. Sing-Box
+Добавьте rule_set в конфигурацию Sing-Box и правило для него:
 
 ```json
 {
