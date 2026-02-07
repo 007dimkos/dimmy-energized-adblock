@@ -1,0 +1,66 @@
+name: Build Dimmy Energized SRS
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 5 * * *' # Обновление ежедневно в 5 утра по UTC
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Raw Lists to Root
+        run: |
+          curl -L "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/pro-onlydomains.txt" -o pro.txt
+          curl -L "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/wildcard/fake-onlydomains.txt" -o fake.txt
+          curl -L "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/wildcard/doh-vpn-proxy-bypass-onlydomains.txt" -o bypass.txt
+
+      - name: Commit Raw Files
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add pro.txt fake.txt bypass.txt
+          # Фиксируем изменения, если файлы обновились
+          git commit -m "Daily sync from HaGeZi" || echo "No changes to commit"
+          git push
+
+      - name: Install Sing-box
+        run: |
+          curl -Lo sing-box.tar.gz https://github.com/SagerNet/sing-box/releases/download/v1.10.1/sing-box-1.10.1-linux-amd64.tar.gz
+          tar -xzf sing-box.tar.gz
+          sudo mv sing-box-*/sing-box /usr/local/bin/
+
+      - name: Process and Exclude
+        run: |
+          # Собираем всё в один кучу
+          cat pro.txt fake.txt bypass.txt > raw_all.txt
+          
+          # Чистим: только уникальные домены, без комментариев и пустых строк
+          grep -v '^#' raw_all.txt | grep -v '^[[:space:]]*$' | sort -u > merged.txt
+          
+          # Вычитаем твой exclude.list
+          if [ -f "exclude.list" ]; then
+            grep -Fvxf exclude.list merged.txt > clean.txt
+          else
+            mv merged.txt clean.txt
+          fi
+
+      - name: Create JSON and Compile SRS
+        run: |
+          # Превращаем в JSON формат sing-box (domain_suffix для блокировки поддоменов)
+          jq -R -s 'split("\n") | map(select(length > 0)) | {version: 1, rules: [{domain_suffix: .}]}' clean.txt > rules.json
+          # Компилируем в бинарный .srs
+          sing-box rule-set compile rules.json -o dimmyenergizi.srs
+
+      - name: Release SRS File
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "Dimmy Energized SRS (Daily Update)"
+          files: dimmyenergizi.srs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
