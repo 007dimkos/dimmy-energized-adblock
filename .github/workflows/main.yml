@@ -24,7 +24,6 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add pro.txt fake.txt bypass.txt
-          # Фиксируем изменения, если файлы обновились
           git commit -m "Daily sync from HaGeZi" || echo "No changes to commit"
           git push
 
@@ -36,24 +35,25 @@ jobs:
 
       - name: Process and Exclude
         run: |
-          # Собираем всё в один кучу
+          # Объединяем файлы
           cat pro.txt fake.txt bypass.txt > raw_all.txt
           
-          # Чистим: только уникальные домены, без комментариев и пустых строк
+          # Базовая чистка от мусора и дублей
           grep -v '^#' raw_all.txt | grep -v '^[[:space:]]*$' | sort -u > merged.txt
           
-          # Вычитаем твой exclude.list
-          if [ -f "exclude.list" ]; then
-            grep -Fvxf exclude.list merged.txt > clean.txt
+          # Умное исключение: удаляем всё, что содержит домены из exclude.list
+          if [ -f "exclude.list" ] && [ -s "exclude.list" ]; then
+            # Убираем пустые строки из exclude.list на всякий случай
+            sed -i '/^[[:space:]]*$/d' exclude.list
+            # Используем fgrep для поиска вхождений строк
+            grep -Fv -f exclude.list merged.txt > clean.txt
           else
             mv merged.txt clean.txt
           fi
 
       - name: Create JSON and Compile SRS
         run: |
-          # Превращаем в JSON формат sing-box (domain_suffix для блокировки поддоменов)
           jq -R -s 'split("\n") | map(select(length > 0)) | {version: 1, rules: [{domain_suffix: .}]}' clean.txt > rules.json
-          # Компилируем в бинарный .srs
           sing-box rule-set compile rules.json -o dimmyenergizi.srs
 
       - name: Release SRS File
