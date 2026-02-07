@@ -8,13 +8,14 @@
 Автоматизированная сборка правил для очищения от рекламы и безопасного интернета.
 Обновляется ежедневно в 05:00 UTC.
 
-🔗 Прямая ссылка на Rule-Set
+🔗 Прямая ссылка
 https://github.com/007dimkos/dimmy-energized-adblock/releases/download/latest/dimmyenergizi.srs
 
 🛠 Настройка
 
 1. PassWall 2 (OpenWrt)
 В поле Remote Rule Set (Удаленные правила) добавь строку:
+
 rule-set:remote:https://github.com/007dimkos/dimmy-energized-adblock/releases/download/latest/dimmyenergizi.srs
 
 Затем установи для этого правила действие BLACKHOLE.
@@ -30,7 +31,7 @@ rule-set:remote:https://github.com/007dimkos/dimmy-energized-adblock/releases/do
         "tag": "energized_ads",
         "type": "remote",
         "format": "binary",
-        "url": "[https://github.com/007dimkos/dimmy-energized-adblock/releases/download/latest/dimmyenergizi.srs](https://github.com/007dimkos/dimmy-energized-adblock/releases/download/latest/dimmyenergizi.srs)"
+        "url": "https://github.com/007dimkos/dimmy-energized-adblock/releases/download/latest/dimmyenergizi.srs"
       }
     ],
     "rules": [
