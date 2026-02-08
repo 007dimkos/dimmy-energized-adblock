@@ -13,17 +13,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Download Raw Lists to Root
+      - name: Download Raw List
         run: |
+          # Скачиваем только актуальный список Hagezi Pro
           curl -L "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/pro-onlydomains.txt" -o pro.txt
-          curl -L "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/wildcard/fake-onlydomains.txt" -o fake.txt
-          curl -L "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/wildcard/doh-vpn-proxy-bypass-onlydomains.txt" -o bypass.txt
 
-      - name: Commit Raw Files
+      - name: Commit Raw File
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add pro.txt fake.txt bypass.txt
+          git add pro.txt
           git commit -m "Daily sync from HaGeZi" || echo "No changes to commit"
           git push
 
@@ -35,25 +34,30 @@ jobs:
 
       - name: Process and Exclude
         run: |
-          # Объединяем файлы
-          cat pro.txt fake.txt bypass.txt > raw_all.txt
+          # 1. Чистим комментарии из основного списка
+          grep -v '^#' pro.txt > temp_cleaned.txt
           
-          # Базовая чистка от мусора и дублей
-          grep -v '^#' raw_all.txt | grep -v '^[[:space:]]*$' | sort -u > merged.txt
-          
-          # Умное исключение: удаляем всё, что содержит домены из exclude.list
-          if [ -f "exclude.list" ] && [ -s "exclude.list" ]; then
-            # Убираем пустые строки из exclude.list на всякий случай
-            sed -i '/^[[:space:]]*$/d' exclude.list
-            # Используем fgrep для поиска вхождений строк
-            grep -Fv -f exclude.list merged.txt > clean.txt
+          # 2. Фильтруем через exclude.list (логика zxc-rv)
+          if [ -f exclude.list ] && [ -s exclude.list ]; then
+            grep -vFf exclude.list temp_cleaned.txt > filtered.txt
           else
-            mv merged.txt clean.txt
+            mv temp_cleaned.txt filtered.txt
           fi
+          
+          # 3. Добавляем свои домены из include.list (если файл есть и не пустой)
+          if [ -f include.list ] && [ -s include.list ]; then
+            cat include.list >> filtered.txt
+            sort -u filtered.txt -o filtered.txt
+          fi
+          
+          # 4. Финальная очистка и подготовка списка
+          grep -v '^[[:space:]]*$' filtered.txt | sort -u > clean.txt
 
       - name: Create JSON and Compile SRS
         run: |
+          # Превращаем в JSON формат sing-box
           jq -R -s 'split("\n") | map(select(length > 0)) | {version: 1, rules: [{domain_suffix: .}]}' clean.txt > rules.json
+          # Компилируем в бинарный .srs
           sing-box rule-set compile rules.json -o dimmyenergizi.srs
 
       - name: Release SRS File
