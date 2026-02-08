@@ -35,23 +35,28 @@ jobs:
 
       - name: Process and Exclude
         run: |
-          # Объединяем три списка в один
+          # 1. Объединяем три списка в один
           cat pro.txt fake.txt bypass.txt > raw_all.txt
           
-          # Чистим комментарии и пустые строки
+          # 2. Чистим комментарии и пустые строки
           grep -v '^#' raw_all.txt | grep -v '^[[:space:]]*$' > temp_cleaned.txt
           
-          # Логика исключений как у zxc-rv: фильтруем через exclude.list
-          if [ -f exclude.list ]; then
-            echo "Фильтруем exclude.list..."
-            grep -vFf exclude.list temp_cleaned.txt > clean.txt || echo "Ошибка фильтрации или файл пуст!"
+          # 3. Фильтруем исключения (чтобы X и картинки работали)
+          if [ -f exclude.list ] && [ -s exclude.list ]; then
+            echo "Применяем исключения из exclude.list..."
+            grep -vFf exclude.list temp_cleaned.txt > temp_filtered.txt
           else
-            mv temp_cleaned.txt clean.txt
-            echo "exclude.list не найден, пропускаем фильтрацию"
+            mv temp_cleaned.txt temp_filtered.txt
           fi
 
-          # Финальная сортировка уникальных доменов
-          sort -u clean.txt -o clean.txt
+          # 4. Добавляем свои домены для блокировки (например, для Habr)
+          if [ -f include.list ] && [ -s include.list ]; then
+            echo "Добавляем домены из include.list..."
+            cat include.list >> temp_filtered.txt
+          fi
+
+          # 5. Финальная сортировка и удаление дублей
+          sort -u temp_filtered.txt -o clean.txt
 
       - name: Create JSON and Compile SRS
         run: |
