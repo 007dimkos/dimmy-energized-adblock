@@ -12,6 +12,8 @@ jobs:
       uses: actions/checkout@v4
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
+        ref: main
+        fetch-depth: 0  # Это фиксит проблемы с пушем
 
     - name: Подготовка списка доменов для dimmyenergizi.dat
       run: |
@@ -119,6 +121,7 @@ jobs:
           dimmyenergizi.mrs
         draft: false
         prerelease: false
+        overwrite: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -126,9 +129,10 @@ jobs:
       run: |
         git config --global user.name "github-actions[bot]"
         git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git pull origin main --rebase  # Это фиксит конфликты и обновляет
         git add dimmyenergizi.srs
-        git commit -m "Daily update: dimmyenergizi.srs ${{ env.RELEASE_DATE }}" || echo "Нет изменений"
-        git push
+        git commit -m "Daily update: dimmyenergizi.srs ${{ env.RELEASE_DATE }}" || echo "Нет изменений для коммита"
+        git push origin main
 
     - name: Удаление старых релизов
       uses: dev-drprasad/delete-older-releases@v0.3.4
