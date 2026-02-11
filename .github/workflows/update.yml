@@ -13,12 +13,11 @@ jobs:
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         ref: main
-        fetch-depth: 0  # Это фиксит проблемы с пушем
+        fetch-depth: 0
 
     - name: Подготовка списка доменов для dimmyenergizi.dat
       run: |
         mkdir -p data
-        echo "Скачиваем актуальный список Hagezi Pro..."
         curl -LsO https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/pro-onlydomains.txt
         grep -v '^#' pro-onlydomains.txt > temp_cleaned.txt
         if [ -f exclude.list ]; then
@@ -72,7 +71,7 @@ jobs:
     - name: Компиляция dimmyenergizi.dat
       run: |
         go run ./
-        mv adlist.dat dimmyenergizi.dat 2>/dev/null || echo "Ошибка переименования .dat"
+        mv adlist.dat dimmyenergizi.dat 2>/dev/null || echo "Ошибка .dat"
         ls -lh dimmyenergizi.dat
 
     - name: Установка Sing-Box
@@ -109,7 +108,7 @@ jobs:
     - name: Дата релиза
       run: echo "RELEASE_DATE=$(date +%d.%m.%Y)" >> $GITHUB_ENV
 
-    - name: Создание релиза
+    - name: Создание/обновление релиза
       uses: softprops/action-gh-release@v2
       with:
         tag_name: "daily-release-${{ env.RELEASE_DATE }}"
@@ -125,13 +124,25 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Коммит dimmyenergizi.srs в корень репозитория
+    - name: Скачиваем свежий dimmyenergizi.srs из latest релиза и дублируем в корень
+      run: |
+        # Скачиваем .srs из latest релиза
+        curl -L -H "Accept: application/octet-stream" \
+          https://github.com/${{ github.repository }}/releases/latest/download/dimmyenergizi.srs \
+          -o dimmyenergizi.srs.new
+
+        # Переименовываем/перезаписываем старый файл
+        mv dimmyenergizi.srs.new dimmyenergizi.srs || echo "Новый файл скачан, перезапись"
+
+        ls -lh dimmyenergizi.srs
+
+    - name: Коммит и пуш перезаписанного dimmyenergizi.srs в main
       run: |
         git config --global user.name "github-actions[bot]"
         git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-        git pull origin main --rebase  # Это фиксит конфликты и обновляет
+        git pull origin main --rebase
         git add dimmyenergizi.srs
-        git commit -m "Daily update: dimmyenergizi.srs ${{ env.RELEASE_DATE }}" || echo "Нет изменений для коммита"
+        git commit -m "Daily duplicate from release: dimmyenergizi.srs ${{ env.RELEASE_DATE }}" || echo "Нет изменений (файл идентичен)"
         git push origin main
 
     - name: Удаление старых релизов
