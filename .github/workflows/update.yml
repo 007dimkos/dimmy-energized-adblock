@@ -8,58 +8,42 @@ jobs:
     runs-on: ubuntu-latest
    
     steps:
-    - name: Чекаем репо
+    - name: Checkout репозитория
       uses: actions/checkout@v4
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
-    - name: Скачиваем и обрабатываем список доменов для adlist.dat
+
+    - name: Подготовка списка доменов для dimmyenergizi.dat
       run: |
         mkdir -p data
         echo "Скачиваем актуальный список Hagezi Pro..."
         curl -LsO https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/pro-onlydomains.txt
-        echo "Чистим комментарии..."
         grep -v '^#' pro-onlydomains.txt > temp_cleaned.txt
-        echo "Фильтруем exclude.list..."
         if [ -f exclude.list ]; then
-          grep -vFf exclude.list temp_cleaned.txt > data/hagezi-pro || echo "Ошибка фильтрации!"
+          grep -vFf exclude.list temp_cleaned.txt > data/hagezi-pro
         else
           mv temp_cleaned.txt data/hagezi-pro
-          echo "exclude.list не найден, пропускаем фильтрацию"
         fi
         if [ -f include.list ]; then
-          echo "Добавляем include.list..."
           cat include.list >> data/hagezi-pro
           sort -uo data/hagezi-pro data/hagezi-pro
         fi
-        echo "Очистка..."
         rm -f pro-onlydomains.txt temp_cleaned.txt
-        echo "hagezi-pro contents (first 5 lines):"
-        head -n5 data/hagezi-pro || echo "Файл не создан!"
-       
-    - name: Скачиваем и обрабатываем список доменов для adlist.json
+
+    - name: Подготовка списка доменов для dimmyenergizi.srs и .mrs
       run: |
-        echo "Скачиваем список для adlist.json..."
         curl -LsO https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/pro-onlydomains.txt
-        echo "Чистим комментарии..."
         grep -v '^#' pro-onlydomains.txt > filtered_domains.txt
-        echo "Фильтруем exclude.list..."
         if [ -f exclude.list ]; then
           grep -vFf exclude.list filtered_domains.txt > temp_filtered.txt && mv temp_filtered.txt filtered_domains.txt
-          echo "Фильтрация прошла!"
-        else
-          echo "exclude.list не найден, пропускаем фильтрацию"
         fi
         if [ -f include.list ]; then
-          echo "Добавляем include.list..."
           cat include.list >> filtered_domains.txt
           sort -uo filtered_domains.txt filtered_domains.txt
         fi
-        echo "Проверяем отфильтрованные домены:"
-        head -n 5 filtered_domains.txt || echo "Нет отфильтрованных доменов!"
-        echo "Кол-во строк в filtered_domains.txt:"
-        wc -l filtered_domains.txt
-        echo "Создаем adlist.json..."
-        cat << EOF > adlist.json
+        rm -f pro-onlydomains.txt
+
+        cat << EOF > dimmyenergizi.json
         {
             "version": 2,
             "rules": [
@@ -69,100 +53,91 @@ jobs:
             ]
         }
         EOF
-        echo "Добавляем домены в adlist.json..."
+
         jq --slurpfile domains <(jq -Rsc 'split("\n") | map(select(length > 0))' filtered_domains.txt) \
-          '.rules[0].domain_suffix = $domains[0]' adlist.json > temp_adlist.json && mv temp_adlist.json adlist.json
-        echo "Очистка..."
-        rm -f pro-onlydomains.txt filtered_domains.txt
-        echo "adlist.json содержит (первые 1000 символов):"
-        head -c 1000 adlist.json || echo "adlist.json не создан!"
-    - name: Устанавливаем GO
+          '.rules[0].domain_suffix = $domains[0]' dimmyenergizi.json > temp.json && mv temp.json dimmyenergizi.json
+
+        rm -f filtered_domains.txt
+
+    - name: Установка Go
       uses: actions/setup-go@v5
       with:
         go-version: 'stable'
-    - name: Загружаем зависимости GO
+
+    - name: Загрузка зависимостей Go
       run: go mod download
-    - name: Компилируем adlist.dat
+
+    - name: Компиляция dimmyenergizi.dat
       run: |
         go run ./
-        echo "Ищем adlist.dat в root:"
-        ls -la adlist.dat || echo "adlist.dat не найден в root"
-    - name: Устанавливаем Sing-Box
+        mv adlist.dat dimmyenergizi.dat 2>/dev/null || echo "Ошибка переименования .dat"
+        ls -lh dimmyenergizi.dat
+
+    - name: Установка Sing-Box
+      run: bash <(curl -Ls https://sing-box.app/deb-install.sh)
+
+    - name: Компиляция dimmyenergizi.srs
       run: |
-        echo "Установка Sing-Box..."
-        bash <(curl -Ls https://sing-box.app/deb-install.sh)
-       
-    - name: Компилируем dimmyenergizi.srs
+        sing-box rule-set compile --output dimmyenergizi.srs dimmyenergizi.json
+        ls -lh dimmyenergizi.srs
+
+    - name: Компиляция dimmyenergizi.mrs
       run: |
-        echo "Компилируем adlist.json в dimmyenergizi.srs..."
-        sing-box rule-set compile --output dimmyenergizi.srs adlist.json
-        echo "Проверяем размер dimmyenergizi.srs :"
-        ls -lh dimmyenergizi.srs || echo "dimmyenergizi.srs не создан!"
-    - name: Скачиваем и обрабатываем список доменов для adlist.mrs
-      run: |
-        echo "Получаем URL последнего релиза mihomo..."
         MIHOMO_URL=$(curl -Ls https://api.github.com/repos/MetaCubeX/mihomo/releases/latest | jq -r '.assets[] | select(.name | test("mihomo-linux-amd64-v3-v.*\\.gz$")) | .browser_download_url')
-        if [ -z "$MIHOMO_URL" ]; then
-          echo "Ошибка: URL mihomo не получен! Выходим..."
-          exit 1
-        fi
-        echo "Скачиваем mihomo бинарник: $MIHOMO_URL..."
-        curl -sSLf "$MIHOMO_URL" -o mihomo.gz || { echo "Ошибка скачивания mihomo!"; exit 1; }
-        echo "Распаковываем mihomo..."
-        gunzip mihomo.gz || { echo "Ошибка распаковки mihomo!"; exit 1; }
+        curl -sSLf "$MIHOMO_URL" -o mihomo.gz
+        gunzip mihomo.gz
         chmod +x mihomo
-        echo "Скачиваем список для adlist.mrs..."
-        curl -LsO https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/pro-onlydomains.txt || { echo "Ошибка скачивания списка Hagezi!"; exit 1; }
-        echo "Чистим комментарии..."
-        grep -v '^#' pro-onlydomains.txt > temp_cleaned.txt || { echo "Ошибка очистки комментариев!"; exit 1; }
-        echo "Фильтруем exclude.list..."
+
+        curl -LsO https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/pro-onlydomains.txt
+        grep -v '^#' pro-onlydomains.txt > temp.txt
         if [ -f exclude.list ]; then
-          grep -vFf exclude.list temp_cleaned.txt > filtered_domains.txt || { echo "Ошибка фильтрации exclude.list!"; exit 1; }
-          echo "Фильтрация прошла!"
+          grep -vFf exclude.list temp.txt > filtered.txt
         else
-          mv temp_cleaned.txt filtered_domains.txt
-          echo "exclude.list не найден, пропускаем фильтрацию"
+          mv temp.txt filtered.txt
         fi
         if [ -f include.list ]; then
-          echo "Добавляем include.list..."
-          cat include.list >> filtered_domains.txt
-          sort -uo filtered_domains.txt filtered_domains.txt
+          cat include.list >> filtered.txt
+          sort -uo filtered.txt filtered.txt
         fi
-        echo "Добавляем '+.' в начало строк..."
-        sed 's/^/+./' filtered_domains.txt > mihomo_domains.txt || { echo "Ошибка обработки списка!"; exit 1; }
-        echo "Проверяем первые 5 строк mihomo_domains.txt:"
-        head -n5 mihomo_domains.txt || echo "mihomo_domains.txt не создан!"
-        echo "Компилируем adlist.mrs..."
-        ./mihomo convert-ruleset domain text mihomo_domains.txt adlist.mrs || { echo "Ошибка компиляции adlist.mrs!"; exit 1; }
-        echo "Проверяем размер adlist.mrs:"
-        ls -lh adlist.mrs || echo "adlist.mrs не создан!"
-        echo "Очистка..."
-        rm -f mihomo mihomo_domains.txt pro-onlydomains.txt temp_cleaned.txt filtered_domains.txt
-    - name: Ставим дату релиза
-      id: set-date
+        sed 's/^/+./' filtered.txt > mihomo_domains.txt
+        ./mihomo convert-ruleset domain text mihomo_domains.txt dimmyenergizi.mrs
+        ls -lh dimmyenergizi.mrs
+        rm -f mihomo mihomo_domains.txt pro-onlydomains.txt temp.txt filtered.txt
+
+    - name: Дата релиза
       run: echo "RELEASE_DATE=$(date +%d.%m.%Y)" >> $GITHUB_ENV
-    - name: Создаем релиз
+
+    - name: Создание релиза
       uses: softprops/action-gh-release@v2
       with:
         tag_name: "daily-release-${{ env.RELEASE_DATE }}"
         name: "Ежедневный выпуск ${{ env.RELEASE_DATE }}"
         files: |
-          adlist.dat
+          dimmyenergizi.dat
           dimmyenergizi.srs
-          adlist.mrs
+          dimmyenergizi.mrs
         draft: false
         prerelease: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    - name: Удаляем старые релизы
+
+    - name: Коммит dimmyenergizi.srs в корень репозитория
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git add dimmyenergizi.srs
+        git commit -m "Daily update: dimmyenergizi.srs ${{ env.RELEASE_DATE }}" || echo "Нет изменений"
+        git push
+
+    - name: Удаление старых релизов
       uses: dev-drprasad/delete-older-releases@v0.3.4
       with:
         keep_latest: 6
         delete_tags: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-       
-    - name: Удаляем старые workflow runs
+
+    - name: Удаление старых workflow runs
       uses: Mattraks/delete-workflow-runs@v2
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
