@@ -6,7 +6,7 @@
 
 
 🔗 Прямая ссылка
-https://github.com/007dimkos/dimmy-energized-adblock/releases/download/daily-release-11.02.2026/dimmyenergizi.srs
+https://github.com/007dimkos/dimmy-energized-adblock/raw/refs/heads/main/dimmyenergizi.srs
 
 🛠 Настройка
 
