@@ -39,3 +39,39 @@ rule-set:remote:https://raw.githubusercontent.com/007dimkos/dimmy-energized-adbl
     ]
   }
 }
+```
+Xray
+Загрузите dimmyenergizi.dat в нужную директорию и добавьте правило для него:
+```
+{
+  "routing": {
+    "rules": [
+      {
+        "domain": "ext:dimmyenergizi.dat:hagezi-pro",
+        "outboundTag": "block"
+      }
+    ]
+  }
+}
+```
+При использовании XKeen с Xray на роутерах Keenetic можно скачать командой в entware:
+```
+curl -Lfo /opt/etc/xray/dat/dimmyenergizi.dat https://github.com/007dimkos/dimmy-energized-adblock/releases/latest/download/dimmyenergizi.dat
+```
+
+
+Mihomo
+Добавьте rule-set в конфигурацию Mihomo и правило для него:
+
+```
+rule-providers:
+  adlist:
+    type: http
+    format: mrs
+    behavior: domain
+    url: https://github.com/007dimkos/dimmy-energized-adblock/releases/latest/download/dimmyenergizi.mrs
+    path: ./rule-providers/dimmyenergizi.mrs
+    interval: 86400
+rules:
+  - RULE-SET,adlist,REJECT
+```
