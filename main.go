@@ -17,7 +17,7 @@ import (
 
 var (
 	dataPath    = flag.String("datapath", "./data", "Path to your custom 'data' directory")
-	outputName  = flag.String("outputname", "adlist.dat", "Name of the generated dat file")
+	outputName  = flag.String("outputname", "dimmyenergizi.dat", "Name of the generated dat file")
 	outputDir   = flag.String("outputdir", "./", "Directory to place all generated files")
 	exportLists = flag.String("exportlists", "", "Lists to be flattened and exported in plaintext format, separated by ',' comma")
 )
@@ -389,3 +389,4 @@ func main() {
 		fmt.Println(*outputName, "has been generated successfully.")
 	}
 }
+
