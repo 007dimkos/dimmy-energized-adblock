@@ -112,6 +112,7 @@ jobs:
       with:
         tag_name: "daily-release-${{ env.RELEASE_DATE }}"
         name: "Ежедневный выпуск ${{ env.RELEASE_DATE }}"
+        body: ""
         files: |
           dimmyenergizi.dat
           dimmyenergizi.srs
