@@ -1,152 +1,100 @@
 name: Обновление списков
+
 on:
   schedule:
     - cron: '25 1 * * *'
   workflow_dispatch:
+
 jobs:
   Update_lists:
     runs-on: ubuntu-latest
-   
+    permissions:
+      contents: write # Важно для записи в репозиторий
+
     steps:
-    - name: Checkout репозитория
+    - name: Чекаем репо
       uses: actions/checkout@v4
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
-        ref: main
-        fetch-depth: 0  # Это фиксит проблемы с пушем
 
-    - name: Подготовка списка доменов для dimmyenergizi.dat
+    - name: Устанавливаем GO
+      uses: actions/setup-go@v5
+      with:
+        go-version: 'stable'
+
+    - name: Скачиваем и обрабатываем список доменов
       run: |
         mkdir -p data
-        echo "Скачиваем актуальный список Hagezi Pro..."
         curl -LsO https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/pro-onlydomains.txt
         grep -v '^#' pro-onlydomains.txt > temp_cleaned.txt
+        
+        # Фильтрация и создание исходного файла для GO
         if [ -f exclude.list ]; then
           grep -vFf exclude.list temp_cleaned.txt > data/hagezi-pro
         else
           mv temp_cleaned.txt data/hagezi-pro
         fi
+        
         if [ -f include.list ]; then
           cat include.list >> data/hagezi-pro
           sort -uo data/hagezi-pro data/hagezi-pro
         fi
-        rm -f pro-onlydomains.txt temp_cleaned.txt
-
-    - name: Подготовка списка доменов для dimmyenergizi.srs и .mrs
-      run: |
-        curl -LsO https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/pro-onlydomains.txt
-        grep -v '^#' pro-onlydomains.txt > filtered_domains.txt
-        if [ -f exclude.list ]; then
-          grep -vFf exclude.list filtered_domains.txt > temp_filtered.txt && mv temp_filtered.txt filtered_domains.txt
-        fi
-        if [ -f include.list ]; then
-          cat include.list >> filtered_domains.txt
-          sort -uo filtered_domains.txt filtered_domains.txt
-        fi
-        rm -f pro-onlydomains.txt
-
+        
+        # Подготовка JSON для Sing-Box
         cat << EOF > dimmyenergizi.json
         {
             "version": 2,
-            "rules": [
-                {
-                    "domain_suffix": []
-                }
-            ]
+            "rules": [{ "domain_suffix": [] }]
         }
         EOF
-
-        jq --slurpfile domains <(jq -Rsc 'split("\n") | map(select(length > 0))' filtered_domains.txt) \
+        jq --slurpfile domains <(jq -Rsc 'split("\n") | map(select(length > 0))' data/hagezi-pro) \
           '.rules[0].domain_suffix = $domains[0]' dimmyenergizi.json > temp.json && mv temp.json dimmyenergizi.json
 
-        rm -f filtered_domains.txt
-
-    - name: Установка Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: 'stable'
-
-    - name: Загрузка зависимостей Go
-      run: go mod download
-
-    - name: Компиляция dimmyenergizi.dat
+    - name: Компиляция dimmyenergizi.dat (V2Ray)
       run: |
+        go mod download
         go run ./
-        mv adlist.dat dimmyenergizi.dat 2>/dev/null || echo "Ошибка переименования .dat"
-        ls -lh dimmyenergizi.dat
+        # Теперь GO сам создаст dimmyenergizi.dat
 
-    - name: Установка Sing-Box
-      run: bash <(curl -Ls https://sing-box.app/deb-install.sh)
-
-    - name: Компиляция dimmyenergizi.srs
+    - name: Компиляция dimmyenergizi.srs (Sing-Box)
       run: |
-        sing-box rule-set compile --output dimmyenergizi.srs dimmyenergizi.json
-        ls -lh dimmyenergizi.srs
+        bash <(curl -Ls https://sing-box.app/deb-install.sh)
+        sing-box rule-set compile dimmyenergizi.json
+        # Переименуем, так как sing-box добавит .srs к имени json
+        mv dimmyenergizi.json.srs dimmyenergizi.srs
 
-    - name: Компиляция dimmyenergizi.mrs
+    - name: Компиляция dimmyenergizi.mrs (Mihomo)
       run: |
         MIHOMO_URL=$(curl -Ls https://api.github.com/repos/MetaCubeX/mihomo/releases/latest | jq -r '.assets[] | select(.name | test("mihomo-linux-amd64-v3-v.*\\.gz$")) | .browser_download_url')
-        curl -sSLf "$MIHOMO_URL" -o mihomo.gz
-        gunzip mihomo.gz
-        chmod +x mihomo
-
-        curl -LsO https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/pro-onlydomains.txt
-        grep -v '^#' pro-onlydomains.txt > temp.txt
-        if [ -f exclude.list ]; then
-          grep -vFf exclude.list temp.txt > filtered.txt
-        else
-          mv temp.txt filtered.txt
-        fi
-        if [ -f include.list ]; then
-          cat include.list >> filtered.txt
-          sort -uo filtered.txt filtered.txt
-        fi
-        sed 's/^/+./' filtered.txt > mihomo_domains.txt
+        curl -sSLf "$MIHOMO_URL" -o mihomo.gz && gunzip mihomo.gz && chmod +x mihomo
+        sed 's/^/+./' data/hagezi-pro > mihomo_domains.txt
         ./mihomo convert-ruleset domain text mihomo_domains.txt dimmyenergizi.mrs
-        ls -lh dimmyenergizi.mrs
-        rm -f mihomo mihomo_domains.txt pro-onlydomains.txt temp.txt filtered.txt
 
-    - name: Дата релиза
-      run: echo "RELEASE_DATE=$(date +%d.%m.%Y)" >> $GITHUB_ENV
+    - name: Обновление SRS в корне репозитория
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        # dimmyenergizi.srs уже находится в корне после шага компиляции
+        git add dimmyenergizi.srs
+        git commit -m "Auto-update dimmyenergizi.srs [skip ci]" || echo "Нет изменений"
+        git push
 
     - name: Создание релиза
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: "daily-release-${{ env.RELEASE_DATE }}"
-        name: "Ежедневный выпуск ${{ env.RELEASE_DATE }}"
-        body: ""
+        tag_name: "release-${{ github.run_number }}"
+        name: "Update ${{ github.run_number }}"
         files: |
           dimmyenergizi.dat
           dimmyenergizi.srs
           dimmyenergizi.mrs
-        draft: false
-        prerelease: false
-        overwrite: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Коммит dimmyenergizi.srs в корень репозитория
-      run: |
-        git config --global user.name "github-actions[bot]"
-        git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-        git pull origin main --rebase  # Это фиксит конфликты и обновляет
-        git add dimmyenergizi.srs
-        git commit -m "Daily update: dimmyenergizi.srs ${{ env.RELEASE_DATE }}" || echo "Нет изменений для коммита"
-        git push origin main
-
-    - name: Удаление старых релизов
+    - name: Очистка старых данных
       uses: dev-drprasad/delete-older-releases@v0.3.4
       with:
-        keep_latest: 6
+        keep_latest: 3
         delete_tags: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Удаление старых workflow runs
-      uses: Mattraks/delete-workflow-runs@v2
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        repository: ${{ github.repository }}
-        delete_workflow_pattern: update.yml
-        retain_days: 7
-        keep_minimum_runs: 0
