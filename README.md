@@ -6,7 +6,7 @@
 
 
 🔗 Прямая ссылка
-https://github.com/007dimkos/dimmy-energized-adblock/raw/refs/heads/main/dimmyenergizi.srs
+https://github.com/007dimkos/dimmy-energized-adblock/releases/download/release-11.02.2026/dimmyenergizi.srs
 
 🛠 Настройка
 
@@ -40,7 +40,8 @@ rule-set:remote:https://raw.githubusercontent.com/007dimkos/dimmy-energized-adbl
   }
 }
 ```
-Xray
+3. Xray
+
 Загрузите dimmyenergizi.dat в нужную директорию и добавьте правило для него:
 ```
 {
@@ -60,7 +61,8 @@ curl -Lfo /opt/etc/xray/dat/dimmyenergizi.dat https://github.com/007dimkos/dimmy
 ```
 
 
-Mihomo
+4. Mihomo
+
 Добавьте rule-set в конфигурацию Mihomo и правило для него:
 
 ```
