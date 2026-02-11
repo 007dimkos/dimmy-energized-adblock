@@ -9,7 +9,7 @@ jobs:
   Update_lists:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Важно для записи в репозиторий
+      contents: write # Разрешение на пуш в репозиторий
 
     steps:
     - name: Чекаем репо
@@ -17,18 +17,13 @@ jobs:
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Устанавливаем GO
-      uses: actions/setup-go@v5
-      with:
-        go-version: 'stable'
-
     - name: Скачиваем и обрабатываем список доменов
       run: |
         mkdir -p data
+        echo "Скачиваем актуальный список Hagezi Pro..."
         curl -LsO https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/pro-onlydomains.txt
         grep -v '^#' pro-onlydomains.txt > temp_cleaned.txt
         
-        # Фильтрация и создание исходного файла для GO
         if [ -f exclude.list ]; then
           grep -vFf exclude.list temp_cleaned.txt > data/hagezi-pro
         else
@@ -40,61 +35,80 @@ jobs:
           sort -uo data/hagezi-pro data/hagezi-pro
         fi
         
-        # Подготовка JSON для Sing-Box
+        # Создаем JSON для Sing-Box с твоим именем
         cat << EOF > dimmyenergizi.json
         {
             "version": 2,
-            "rules": [{ "domain_suffix": [] }]
+            "rules": [
+                {
+                    "domain_suffix": []
+                }
+            ]
         }
         EOF
         jq --slurpfile domains <(jq -Rsc 'split("\n") | map(select(length > 0))' data/hagezi-pro) \
           '.rules[0].domain_suffix = $domains[0]' dimmyenergizi.json > temp.json && mv temp.json dimmyenergizi.json
 
-    - name: Компиляция dimmyenergizi.dat (V2Ray)
+    - name: Устанавливаем GO
+      uses: actions/setup-go@v5
+      with:
+        go-version: 'stable'
+
+    - name: Компилируем dimmyenergizi.dat (через флаги GO)
       run: |
         go mod download
-        go run ./
-        # Теперь GO сам создаст dimmyenergizi.dat
+        # Используем флаг -outputname, чтобы не менять код main.go
+        go run main.go -outputname="dimmyenergizi.dat"
 
-    - name: Компиляция dimmyenergizi.srs (Sing-Box)
+    - name: Устанавливаем Sing-Box
       run: |
         bash <(curl -Ls https://sing-box.app/deb-install.sh)
+        
+    - name: Компилируем dimmyenergizi.srs
+      run: |
         sing-box rule-set compile dimmyenergizi.json
-        # Переименуем, так как sing-box добавит .srs к имени json
+        # Переименовываем результат (sing-box по дефолту добавит расширение к имени json)
         mv dimmyenergizi.json.srs dimmyenergizi.srs
 
-    - name: Компиляция dimmyenergizi.mrs (Mihomo)
+    - name: Компилируем dimmyenergizi.mrs (Mihomo)
       run: |
         MIHOMO_URL=$(curl -Ls https://api.github.com/repos/MetaCubeX/mihomo/releases/latest | jq -r '.assets[] | select(.name | test("mihomo-linux-amd64-v3-v.*\\.gz$")) | .browser_download_url')
         curl -sSLf "$MIHOMO_URL" -o mihomo.gz && gunzip mihomo.gz && chmod +x mihomo
         sed 's/^/+./' data/hagezi-pro > mihomo_domains.txt
         ./mihomo convert-ruleset domain text mihomo_domains.txt dimmyenergizi.mrs
 
-    - name: Обновление SRS в корне репозитория
+    # 2) Копируем SRS в корень и делаем коммит
+    - name: Синхронизация SRS в корень репозитория
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
-        # dimmyenergizi.srs уже находится в корне после шага компиляции
+        # Файл dimmyenergizi.srs уже создан в текущей папке (корне)
         git add dimmyenergizi.srs
-        git commit -m "Auto-update dimmyenergizi.srs [skip ci]" || echo "Нет изменений"
+        git commit -m "Update dimmyenergizi.srs from Release [skip ci]" || echo "No changes to commit"
         git push
 
-    - name: Создание релиза
+    - name: Ставим дату релиза
+      id: set-date
+      run: echo "RELEASE_DATE=$(date +%d.%m.%Y)" >> $GITHUB_ENV
+
+    - name: Создаем релиз
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: "release-${{ github.run_number }}"
-        name: "Update ${{ github.run_number }}"
+        tag_name: "daily-${{ env.RELEASE_DATE }}"
+        name: "Выпуск ${{ env.RELEASE_DATE }}"
         files: |
           dimmyenergizi.dat
           dimmyenergizi.srs
           dimmyenergizi.mrs
+        draft: false
+        prerelease: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Очистка старых данных
+    - name: Удаление старых релизов
       uses: dev-drprasad/delete-older-releases@v0.3.4
       with:
-        keep_latest: 3
+        keep_latest: 5
         delete_tags: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
