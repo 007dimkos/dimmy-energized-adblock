@@ -13,7 +13,7 @@ https://github.com/007dimkos/dimmy-energized-adblock/raw/refs/heads/main/dimmyen
 1. PassWall 2 (OpenWrt)
 В поле Remote Rule Set (Удаленные правила) Domain добавь строку:
 ```json
-rule-set:remote:https://github.com/007dimkos/dimmy-energized-adblock/releases/download/latest/dimmyenergizi.srs
+rule-set:remote:https://raw.githubusercontent.com/007dimkos/dimmy-energized-adblock/refs/heads/main/dimmyenergizi.srs
 ```
 Затем установи для этого правила действие BLACKHOLE.
 
