@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write # Важно: дает право пушить файл .srs обратно в репозиторий
-env:
+    env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true     # ← Добавь эту строку
 
     steps:
