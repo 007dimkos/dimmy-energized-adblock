@@ -10,6 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write # Важно: дает право пушить файл .srs обратно в репозиторий
+env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true     # ← Добавь эту строку
 
     steps:
     - name: Чекаем репо
@@ -113,10 +115,10 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-   # - name: Удаление старых релизов
-   #   uses: dev-drprasad/delete-older-releases@v0.3.4
-   #   with:
-   #     keep_latest: 3
-   #     delete_tags: true
-   #   env:
-   #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Удаление старых релизов
+      uses: dev-drprasad/delete-older-releases@v0.3.4
+      with:
+        keep_latest: 3
+        delete_tags: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
