@@ -27,19 +27,33 @@ jobs:
         mkdir -p data
         curl -LsO https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/pro-onlydomains.txt
         grep -v '^#' pro-onlydomains.txt > temp_cleaned.txt
-        
+       
         # Фильтрация (exclude/include)
         if [ -f exclude.list ]; then
           grep -vFf exclude.list temp_cleaned.txt > data/hagezi-pro
         else
           mv temp_cleaned.txt data/hagezi-pro
         fi
-        
+       
         if [ -f include.list ]; then
           cat include.list >> data/hagezi-pro
           sort -uo data/hagezi-pro data/hagezi-pro
         fi
-        
+
+        # ====================== NEW: Добавляем русский список NoADS_RU ======================
+        echo "=== Downloading and processing NoADS_RU ==="
+        curl -sL https://raw.githubusercontent.com/Zalexanninev15/NoADS_RU/main/hosts/blockerFL.txt \
+          | grep -v '^#' \
+          | grep -v '^$' \
+          | sed 's/^0.0.0.0 //' \
+          | sed 's/^127.0.0.1 //' \
+          > data/noads_ru.txt
+
+        # Мерджим hagezi + NoADS_RU и убираем дубликаты
+        cat data/hagezi-pro data/noads_ru.txt | sort -u > data/merged-domains.txt
+        mv data/merged-domains.txt data/hagezi-pro
+        # ================================================================================
+
         # Подготовка JSON для Sing-Box
         cat << EOF > dimmyenergizi.json
         {
@@ -59,7 +73,7 @@ jobs:
     - name: Устанавливаем Sing-Box
       run: |
         bash <(curl -Ls https://sing-box.app/deb-install.sh)
-        
+       
     - name: Компиляция dimmyenergizi.srs
       run: |
         sing-box rule-set compile dimmyenergizi.json
