@@ -9,116 +9,114 @@ jobs:
   Update_lists:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Важно: дает право пушить файл .srs обратно в репозиторий
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true     # ← Добавь эту строку
+      contents: write
 
     steps:
-    - name: Чекаем репо
-      uses: actions/checkout@v5
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Чекаем репо
+        uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Устанавливаем GO
-      uses: actions/setup-go@v6
-      with:
-        go-version: 'stable'
+      - name: Устанавливаем GO
+        uses: actions/setup-go@v6
+        with:
+          go-version: 'stable'
 
-    - name: Скачиваем и обрабатываем список доменов
-      run: |
-        mkdir -p data
-        curl -LsO https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/pro-onlydomains.txt
-        grep -v '^#' pro-onlydomains.txt > temp_cleaned.txt
-       
-        # Фильтрация (exclude/include)
-        if [ -f exclude.list ]; then
-          grep -vFf exclude.list temp_cleaned.txt > data/hagezi-pro
-        else
-          mv temp_cleaned.txt data/hagezi-pro
-        fi
-       
-        if [ -f include.list ]; then
-          cat include.list >> data/hagezi-pro
-          sort -uo data/hagezi-pro data/hagezi-pro
-        fi
+      - name: Скачиваем и обрабатываем список доменов
+        run: |
+          mkdir -p data
+          
+          # Скачивание hagezi с зачисткой переносов строк \r
+          curl -fsSL --retry 3 "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/pro-onlydomains.txt" | tr -d '\r' > pro-onlydomains.txt
+          grep -v '^#' pro-onlydomains.txt | grep -v '^$' > temp_cleaned.txt
+         
+          # Фильтрация (exclude/include)
+          if [ -f exclude.list ]; then
+            grep -vFf exclude.list temp_cleaned.txt > data/hagezi-pro
+          else
+            mv temp_cleaned.txt data/hagezi-pro
+          fi
+         
+          if [ -f include.list ]; then
+            cat include.list >> data/hagezi-pro
+            sort -uo data/hagezi-pro data/hagezi-pro
+          fi
 
-        # ====================== NEW: Добавляем русский список NoADS_RU ======================
-        echo "=== Downloading and processing NoADS_RU ==="
-        curl -sL https://raw.githubusercontent.com/Zalexanninev15/NoADS_RU/main/hosts/blockerFL.txt \
-          | grep -v '^#' \
-          | grep -v '^$' \
-          | sed 's/^0.0.0.0 //' \
-          | sed 's/^127.0.0.1 //' \
-          > data/noads_ru.txt
+          # Скачивание и обработка NoADS_RU
+          echo "=== Скачивание и обработка NoADS_RU ==="
+          curl -fsSL --retry 3 "https://raw.githubusercontent.com/Zalexanninev15/NoADS_RU/main/hosts/blockerFL.txt" | \
+            tr -d '\r' | \
+            grep -v '^#' | \
+            grep -v '^$' | \
+            sed 's/^0\.0\.0\.0 //' | \
+            sed 's/^127\.0\.0\.1 //' \
+            > data/noads_ru.txt
 
-        # Мерджим hagezi + NoADS_RU и убираем дубликаты
-        cat data/hagezi-pro data/noads_ru.txt | sort -u > data/merged-domains.txt
-        mv data/merged-domains.txt data/hagezi-pro
-        # ================================================================================
+          # Мерджим hagezi + NoADS_RU и убираем дубликаты
+          cat data/hagezi-pro data/noads_ru.txt | sort -u | grep -v '^$' > data/merged-domains.txt
+          mv data/merged-domains.txt data/hagezi-pro
 
-        # Подготовка JSON для Sing-Box
-        cat << EOF > dimmyenergizi.json
-        {
-            "version": 2,
-            "rules": [{ "domain_suffix": [] }]
-        }
-        EOF
-        jq --slurpfile domains <(jq -Rsc 'split("\n") | map(select(length > 0))' data/hagezi-pro) \
-          '.rules[0].domain_suffix = $domains[0]' dimmyenergizi.json > temp.json && mv temp.json dimmyenergizi.json
+          # Сборка JSON для Sing-Box через jq
+          jq -n \
+            --rawfile domains data/hagezi-pro \
+            '{
+              version: 2,
+              rules: [
+                {
+                  domain_suffix: ($domains | split("\n") | map(select(length > 0)))
+                }
+              ]
+            }' > dimmyenergizi.json
 
-    - name: Компиляция dimmyenergizi.dat
-      run: |
-        go mod download
-        go run main.go
-        # Твой исправленный main.go теперь сам создает dimmyenergizi.dat
+      - name: Компиляция dimmyenergizi.dat
+        run: |
+          go mod download
+          go run main.go
 
-    - name: Устанавливаем Sing-Box
-      run: |
-        bash <(curl -Ls https://sing-box.app/deb-install.sh)
-       
-    - name: Компиляция dimmyenergizi.srs
-      run: |
-        sing-box rule-set compile dimmyenergizi.json
-        # Если sing-box создает файл dimmyenergizi.json.srs, переименовываем его:
-        [ -f dimmyenergizi.json.srs ] && mv dimmyenergizi.json.srs dimmyenergizi.srs || echo "SRS уже назван верно"
+      - name: Устанавливаем Sing-Box
+        run: |
+          curl -fsSL --retry 3 "https://github.com/SagerNet/sing-box/releases/download/v1.12.17/sing-box-1.12.17-linux-amd64.tar.gz" -o sing-box.tar.gz
+          tar -xzf sing-box.tar.gz
+          mv sing-box-*/sing-box .
+          chmod +x sing-box
 
-    - name: Компиляция dimmyenergizi.mrs (Mihomo)
-      run: |
-        MIHOMO_URL=$(curl -Ls https://api.github.com/repos/MetaCubeX/mihomo/releases/latest | jq -r '.assets[] | select(.name | test("mihomo-linux-amd64-v3-v.*\\.gz$")) | .browser_download_url')
-        curl -sSLf "$MIHOMO_URL" -o mihomo.gz && gunzip mihomo.gz && chmod +x mihomo
-        sed 's/^/+./' data/hagezi-pro > mihomo_domains.txt
-        ./mihomo convert-ruleset domain text mihomo_domains.txt dimmyenergizi.mrs
+      - name: Компиляция dimmyenergizi.srs
+        run: |
+          ./sing-box rule-set compile --output dimmyenergizi.srs dimmyenergizi.json
 
-    # Второе твое условие: копирование и обновление .srs в корне репозитория
-    - name: Обновление dimmyenergizi.srs в корне репозитория
-      run: |
-        git config --local user.email "github-actions[bot]@users.noreply.github.com"
-        git config --local user.name "github-actions[bot]"
-        # Добавляем файл .srs (он уже находится в корне рабочей директории после компиляции)
-        git add dimmyenergizi.srs
-        git commit -m "chore: auto-update dimmyenergizi.srs [skip ci]" || echo "Нет изменений для коммита"
-        git push origin main
+      - name: Компиляция dimmyenergizi.mrs (Mihomo)
+        run: |
+          MIHOMO_URL=$(curl -fsSL --retry 3 "https://api.github.com/repos/MetaCubeX/mihomo/releases/latest" | jq -r '.assets[] | select(.name | test("mihomo-linux-amd64-v3-v.*\\.gz$")) | .browser_download_url')
+          curl -fsSL --retry 3 "$MIHOMO_URL" -o mihomo.gz && gunzip mihomo.gz && chmod +x mihomo
+          sed 's/^/+./' data/hagezi-pro > mihomo_domains.txt
+          ./mihomo convert-ruleset domain text mihomo_domains.txt dimmyenergizi.mrs
 
-    - name: Ставим дату релиза
-      id: set-date
-      run: echo "RELEASE_DATE=$(date +%d.%m.%Y)" >> $GITHUB_ENV
+      - name: Обновление dimmyenergizi.srs в корне репозитория
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add dimmyenergizi.srs
+          git commit -m "chore: auto-update dimmyenergizi.srs [skip ci]" || echo "Нет изменений для коммита"
+          git push origin main
 
-    - name: Создание GitHub Release
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: "release-${{ env.RELEASE_DATE }}"
-        name: "Списки от ${{ env.RELEASE_DATE }}"
-        files: |
-          dimmyenergizi.dat
-          dimmyenergizi.srs
-          dimmyenergizi.mrs
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Публикация релиза и удаление старых
+        run: |
+          RELEASE_DATE=$(date +%d.%m.%Y)
+          TAG_NAME="release-${RELEASE_DATE}"
+          
+          # Публикация/обновление релиза через GitHub CLI
+          gh release create "$TAG_NAME" dimmyenergizi.dat dimmyenergizi.srs dimmyenergizi.mrs \
+            --title "Списки от ${RELEASE_DATE}" \
+            --notes "Автоматическое обновление списков." \
+            --clobber \
+            --latest || \
+          gh release upload "$TAG_NAME" dimmyenergizi.dat dimmyenergizi.srs dimmyenergizi.mrs --clobber
 
-    - name: Удаление старых релизов
-      uses: dev-drprasad/delete-older-releases@v0.3.4
-      with:
-        keep_latest: 3
-        delete_tags: true
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Удаление старых релизов (оставляем только последние 3)
+          OLD_RELEASES=$(gh release list --limit 100 | awk '{print $3}' | tail -n +4)
+          for tag in $OLD_RELEASES; do
+            echo "Удаляем старый релиз: $tag"
+            gh release delete "$tag" --cleanup-tag -y || true
+          done
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
