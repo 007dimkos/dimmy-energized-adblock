@@ -108,7 +108,6 @@ jobs:
           gh release create "$TAG_NAME" dimmyenergizi.dat dimmyenergizi.srs dimmyenergizi.mrs \
             --title "Списки от ${RELEASE_DATE}" \
             --notes "Автоматическое обновление списков." \
-            --clobber \
             --latest || \
           gh release upload "$TAG_NAME" dimmyenergizi.dat dimmyenergizi.srs dimmyenergizi.mrs --clobber
 
