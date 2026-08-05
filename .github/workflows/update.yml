@@ -29,32 +29,21 @@ jobs:
           # Скачивание hagezi с зачисткой переносов строк \r
           curl -fsSL --retry 3 "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/pro-onlydomains.txt" | tr -d '\r' > pro-onlydomains.txt
           grep -v '^#' pro-onlydomains.txt | grep -v '^$' > temp_cleaned.txt
-         
+          
           # Фильтрация (exclude/include)
           if [ -f exclude.list ]; then
             grep -vFf exclude.list temp_cleaned.txt > data/hagezi-pro
           else
             mv temp_cleaned.txt data/hagezi-pro
           fi
-         
+          
           if [ -f include.list ]; then
             cat include.list >> data/hagezi-pro
-            sort -uo data/hagezi-pro data/hagezi-pro
           fi
 
-          # Скачивание и обработка NoADS_RU
-          echo "=== Скачивание и обработка NoADS_RU ==="
-          curl -fsSL --retry 3 "https://raw.githubusercontent.com/Zalexanninev15/NoADS_RU/main/hosts/blockerFL.txt" | \
-            tr -d '\r' | \
-            grep -v '^#' | \
-            grep -v '^$' | \
-            sed 's/^0\.0\.0\.0 //' | \
-            sed 's/^127\.0\.0\.1 //' \
-            > data/noads_ru.txt
-
-          # Мерджим hagezi + NoADS_RU и убираем дубликаты
-          cat data/hagezi-pro data/noads_ru.txt | sort -u | grep -v '^$' > data/merged-domains.txt
-          mv data/merged-domains.txt data/hagezi-pro
+          # Убираем дубликаты и пустые строки
+          sort -u data/hagezi-pro | grep -v '^$' > temp_sorted.txt
+          mv temp_sorted.txt data/hagezi-pro
 
           # Сборка JSON для Sing-Box через jq
           jq -n \
