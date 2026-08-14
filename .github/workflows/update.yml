@@ -69,13 +69,9 @@ jobs:
           mv sing-box-*/sing-box .
           chmod +x sing-box
 
-      - name: Компиляция dimmyenergizi.srs
-        run: |
-          ./sing-box rule-set compile --output dimmyenergizi.srs dimmyenergizi.json
-
       - name: Компиляция dimmyenergizi.mrs (Mihomo)
         run: |
-          MIHOMO_URL=$(curl -fsSL --retry 3 "https://api.github.com/repos/MetaCubeX/mihomo/releases/latest" | jq -r '.assets[] | select(.name | test("mihomo-linux-amd64-v3-v.*\\.gz$")) | .browser_download_url')
+          MIHOMO_URL=$(curl -fsSL --retry 3 -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/MetaCubeX/mihomo/releases/latest" | jq -r '.assets[] | select(.name | test("mihomo-linux-amd64-v3-v.*\\.gz$")) | .browser_download_url')
           curl -fsSL --retry 3 "$MIHOMO_URL" -o mihomo.gz && gunzip mihomo.gz && chmod +x mihomo
           sed 's/^/+./' data/hagezi-pro > mihomo_domains.txt
           ./mihomo convert-ruleset domain text mihomo_domains.txt dimmyenergizi.mrs
