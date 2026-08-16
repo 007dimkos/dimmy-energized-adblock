@@ -27,7 +27,7 @@ jobs:
           mkdir -p data
           
           # Скачивание hagezi с зачисткой переносов строк \r (через зеркало GitLab)
-          curl -fsSL --retry 3 "https://gitlab.com/hagezi/mirror/-/raw/main/dns-blocklists/wildcard/pro-onlydomains.txt?ref_type=heads" | tr -d '\r' > pro-onlydomains.txt
+          curl -fsSL --retry 3 "https://hagezi-mirror.dnsbunker.org/wildcard/pro-onlydomains.txt" | tr -d '\r' > pro-onlydomains.txt
           grep -v '^#' pro-onlydomains.txt | grep -v '^$' > temp_cleaned.txt
           
           # Фильтрация (exclude/include)
