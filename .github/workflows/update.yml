@@ -26,15 +26,9 @@ jobs:
         run: |
           mkdir -p data
           
-          # Скачиваем Pro и TIF через зеркало DNSBunker
-          curl -fsSL --retry 3 "https://hagezi-mirror.dnsbunker.org/wildcard/pro-onlydomains.txt" | tr -d '\r' > pro-onlydomains.txt
-          curl -fsSL --retry 3 "https://hagezi-mirror.dnsbunker.org/wildcard/tif-onlydomains.txt" | tr -d '\r' > tif-onlydomains.txt
-          
-          # Склеиваем оба списка в один
-          cat pro-onlydomains.txt tif-onlydomains.txt > combined_lists.txt
-          
-          # Чистим от комментариев и пустых строк
-          grep -v '^#' combined_lists.txt | grep -v '^$' > temp_cleaned.txt
+          # Скачивание hagezi с зачисткой переносов строк \r (через зеркало GitLab)
+          curl -fsSL --retry 3 "https://gitlab.com/hagezi/mirror/-/raw/main/dns-blocklists/wildcard/pro-onlydomains.txt?ref_type=heads" | tr -d '\r' > pro-onlydomains.txt
+          grep -v '^#' pro-onlydomains.txt | grep -v '^$' > temp_cleaned.txt
           
           # Фильтрация (exclude/include)
           if [ -f exclude.list ]; then
@@ -74,10 +68,6 @@ jobs:
           tar -xzf sing-box.tar.gz
           mv sing-box-*/sing-box .
           chmod +x sing-box
-
-      - name: Компиляция dimmyenergizi.srs
-        run: |
-          ./sing-box rule-set compile --output dimmyenergizi.srs dimmyenergizi.json
 
       - name: Компиляция dimmyenergizi.mrs (Mihomo)
         run: |
