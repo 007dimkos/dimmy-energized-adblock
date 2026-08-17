@@ -26,9 +26,20 @@ jobs:
         run: |
           mkdir -p data
           
-          # Скачивание hagezi с зачисткой переносов строк \r (через зеркало GitLab)
-          curl -fsSL --retry 3 "https://hagezi-mirror.dnsbunker.org/wildcard/pro-onlydomains.txt" | tr -d '\r' > pro-onlydomains.txt
-          grep -v '^#' pro-onlydomains.txt | grep -v '^$' > temp_cleaned.txt
+          # 1. Скачиваем легкий глобальный список Hagezi (Multi)
+          curl -fsSL --retry 3 "https://hagezi-mirror.dnsbunker.org/wildcard/multi-onlydomains.txt" | tr -d '\r' > multi-onlydomains.txt
+          
+          # 2. Скачиваем защиту от малвари Hagezi (TIF)
+          curl -fsSL --retry 3 "https://hagezi-mirror.dnsbunker.org/wildcard/tif-onlydomains.txt" | tr -d '\r' > tif-onlydomains.txt
+          
+          # 3. Скачиваем NoADS_RU (Blocker) и вытаскиваем из hosts формата только домены
+          curl -fsSL --retry 3 "https://raw.githubusercontent.com/Zalexanninev15/NoADS_RU/main/hosts/blocker.txt" | tr -d '\r' | awk '/^0\.0\.0\.0/ {print $2}' > noads_ru.txt
+          
+          # Склеиваем все три списка в один
+          cat multi-onlydomains.txt tif-onlydomains.txt noads_ru.txt > combined_lists.txt
+          
+          # Чистим от комментариев и пустых строк
+          grep -v '^#' combined_lists.txt | grep -v '^$' > temp_cleaned.txt
           
           # Фильтрация (exclude/include)
           if [ -f exclude.list ]; then
@@ -41,7 +52,7 @@ jobs:
             cat include.list >> data/hagezi-pro
           fi
 
-          # Убираем дубликаты и пустые строки
+          # Убираем дубликаты и пустые строки (sort -u удалит повторы из разных списков)
           sort -u data/hagezi-pro | grep -v '^$' > temp_sorted.txt
           mv temp_sorted.txt data/hagezi-pro
 
@@ -68,6 +79,10 @@ jobs:
           tar -xzf sing-box.tar.gz
           mv sing-box-*/sing-box .
           chmod +x sing-box
+
+      - name: Компиляция dimmyenergizi.srs
+        run: |
+          ./sing-box rule-set compile --output dimmyenergizi.srs dimmyenergizi.json
 
       - name: Компиляция dimmyenergizi.mrs (Mihomo)
         run: |
